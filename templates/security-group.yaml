@@ -1,0 +1,37 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Security Group
+
+Parameters:
+  Name:
+    Type: String
+    Description: Security Group Identifying Name
+    Default: __NONE__
+  VpcId:
+    Type: String
+    Description: VPC That Security Group Exists
+
+Conditions:
+  IsNamed:
+    Fn::Not:
+      - !Equals [ !Ref Name, __NONE__ ]
+
+Resources:
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName:
+        Fn::If:
+          - IsNamed
+          - !Ref Name
+          - !Ref AWS::NoValue
+      GroupDescription: !Sub Description For ${AWS::StackName}-${Name}
+      VpcId: !Ref VpcId
+
+Outputs:
+  SecurityGroupId:
+    Description: Security Group ID
+    Value: !GetAtt SecurityGroup.GroupId
+    Export:
+      Name: !Sub SecurityGroupId${Name}

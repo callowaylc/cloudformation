@@ -1,0 +1,213 @@
+#jinja2: lstrip_blocks: True
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: A Sanity Check
+
+Parameters:
+  Name:
+    Type: String
+    Description: AWS ECS Task Name
+  DockerImage:
+    Type: String
+    Description: Docker Image Repository URL
+  DockerTag:
+    Type: String
+    Description: Docker Image Tag
+    Default: latest
+  SubnetsExportName:
+    Type: String
+    Description: The Subnets Where Service Will Run
+  VpcIdExportName:
+    Type: String
+    Description: The VPC Where Service Will Run
+  Port:
+    Type: Number
+    Description: Application Port
+  DatabaseUsername:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: Parameter Store Path To Database Username
+  DatabasePassword:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: Parameter Store Path To Database Password
+  DatabasePort:
+    Type: Number
+    Description: The Database Port
+    Default: 5432
+
+
+Resources:
+  SecurityGroupAlb:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL:
+        Fn::Sub: {{ ENV.LINK }}/security-group.yaml
+      Parameters:
+        Name: !Ref Name
+        VpcId:
+          Fn::ImportValue: !Ref VpcIdExportName
+
+  {% for port in Config.Alb.SecurityGroupIngressPorts|default([]) %}
+  SecurityGroupIngressAlb{{ port }}:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - SecurityGroupAlb
+    Properties:
+      TemplateURL:
+        Fn::Sub: {{ ENV.LINK }}/security-group-ingress.yaml
+      Parameters:
+        Name: !Ref Name
+        SecurityGroupId: !GetAtt SecurityGroupAlb.Outputs.SecurityGroupId
+        Port: {{ port }}
+        CidrIp: 0.0.0.0/0
+  {% endfor %}
+
+  SecurityGroupEgressAlb:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - SecurityGroupAlb
+      - SecurityGroupEcs
+    Properties:
+      TemplateURL:
+        Fn::Sub: {{ ENV.LINK }}/security-group-egress.yaml
+      Parameters:
+        Name: !Ref Name
+        SecurityGroupId: !GetAtt SecurityGroupAlb.Outputs.SecurityGroupId
+        Port: !Ref Port
+        DestinationSecurityGroupId: !GetAtt SecurityGroupEcs.Outputs.SecurityGroupId
+
+  LoadBalancer:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - SecurityGroupAlb
+    Properties:
+      TemplateURL:
+        Fn::Sub: {{ ENV.LINK }}/alb.yaml
+      Parameters:
+        Name:
+          Ref: Name
+        SecurityGroups: !GetAtt SecurityGroupAlb.Outputs.SecurityGroupId
+        Subnets:
+          Fn::ImportValue: !Sub ${SubnetsExportName}
+
+  TargetGroup:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - LoadBalancer
+    Properties:
+      TemplateURL:
+        Fn::Sub: {{ ENV.LINK }}/alb-target-group.yaml
+      Parameters:
+        Name: !Ref Name
+        VpcId:
+          Fn::ImportValue: !Ref VpcIdExportName
+        Port: !Ref Port
+        LoadBalancerArn: !GetAtt LoadBalancer.Outputs.LoadBalancerArn
+
+  Cluster:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL:
+        Fn::Sub: {{ ENV.LINK }}/ecs.yaml
+      Parameters:
+        Name: !Ref Name
+
+  Task:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - Cluster
+      - TargetGroup
+    Properties:
+      TemplateURL:
+        Fn::Sub: {{ ENV.LINK }}/ecs-task.yaml
+      Parameters:
+        Name: !Ref Name
+        DockerImage: !Ref DockerImage
+        ClusterArn: !GetAtt Cluster.Outputs.ClusterArn
+        Port: !Ref Port
+
+  SecurityGroupEcs:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL:
+        Fn::Sub: {{ ENV.LINK }}/security-group.yaml
+      Parameters:
+        Name: !Sub ${Name}-ECS
+        VpcId:
+          Fn::ImportValue: !Ref VpcIdExportName
+
+  SecurityGroupIngressEcs:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - SecurityGroupEcs
+      - SecurityGroupAlb
+    Properties:
+      TemplateURL:
+        Fn::Sub: {{ ENV.LINK }}/security-group-ingress.yaml
+      Parameters:
+        Name: !Ref Name
+        SecurityGroupId: !GetAtt SecurityGroupEcs.Outputs.SecurityGroupId
+        Port: !Ref Port
+        SourceSecurityGroupId: !GetAtt SecurityGroupAlb.Outputs.SecurityGroupId
+
+  Service:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - Task
+      - TargetGroup
+      - Cluster
+      - SecurityGroupEcs
+    Properties:
+      TemplateURL:
+        Fn::Sub: {{ ENV.LINK }}/ecs-service.yaml
+      Parameters:
+        Name: !Ref Name
+        Port: !Ref Port
+        TargetGroupArn: !GetAtt TargetGroup.Outputs.TargetGroupArn
+        Subnets:
+          Fn::ImportValue: !Ref SubnetsExportName
+        SecurityGroups: !GetAtt SecurityGroupEcs.Outputs.SecurityGroupId
+        TaskDefinitionArn: !GetAtt Task.Outputs.TaskArn
+        ClusterArn: !GetAtt Cluster.Outputs.ClusterArn
+
+  SecurityGroupDatabase:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL:
+        Fn::Sub: {{ ENV.LINK }}/security-group.yaml
+      Parameters:
+        Name: !Sub ${Name}-Database
+        VpcId:
+          Fn::ImportValue: !Ref VpcIdExportName
+
+  SecurityGroupDatabaseIngress:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - SecurityGroupDatabase
+      - SecurityGroupEcs
+    Properties:
+      TemplateURL:
+        Fn::Sub: {{ ENV.LINK }}/security-group-ingress.yaml
+      Parameters:
+        Name: !Ref Name
+        SecurityGroupId: !GetAtt SecurityGroupDatabase.Outputs.SecurityGroupId
+        Port: !Ref DatabasePort
+        SourceSecurityGroupId: !GetAtt SecurityGroupEcs.Outputs.SecurityGroupId
+
+  Database:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - SecurityGroupDatabase
+    Properties:
+      TemplateURL:
+        Fn::Sub: {{ ENV.LINK }}/rds.yaml
+      Parameters:
+        Name: !Ref Name
+        Username: !Ref DatabaseUsername
+        Password: !Ref DatabasePassword
+        SecurityGroupIds: !GetAtt SecurityGroupDatabase.Outputs.SecurityGroupId
+        Port: !Ref DatabasePort
+        StorageEncrypted: False
+        Subnets:
+          Fn::ImportValue: !Sub ${SubnetsExportName}
+

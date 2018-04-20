@@ -1,0 +1,57 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: S3 Bucket and Policy stack
+
+Parameters:
+  Name:
+    Type: String
+    Description: ECR Repository Name
+  Whitelist:
+    Type: String
+    Description: Whitelist A Single User Operations Against Registry
+    Default: __ALL__
+
+Conditions:
+  AllowsAllUsers:
+    Fn::Equals:
+      - !Ref Whitelist
+      - __ALL__
+
+Resources:
+  Repository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName:
+        Ref: Name
+      RepositoryPolicyText:
+        Version: 2012-10-17
+        Statement:
+          -
+            Sid: AllowPushPull
+            Effect: Allow
+            Principal:
+              AWS:
+                Fn::If:
+                  - AllowsAllUsers
+                  - Fn::Sub: arn:aws:iam::${AWS::AccountId}:root
+                  - Fn::Sub: arn:aws:iam::${AWS::AccountId}:user/${Whitelist}
+            Action:
+              - "ecr:GetDownloadUrlForLayer"
+              - "ecr:BatchGetImage"
+              - "ecr:BatchCheckLayerAvailability"
+              - "ecr:PutImage"
+              - "ecr:InitiateLayerUpload"
+              - "ecr:UploadLayerPart"
+              - "ecr:CompleteLayerUpload"
+
+Outputs:
+  ReportArn:
+    Description: Repository ARN
+    Value:
+      Fn::GetAtt:
+        - Repository
+        - Arn
+    Export:
+      Name:
+        Fn::Sub: RepositoryArn${Name}

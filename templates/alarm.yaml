@@ -1,0 +1,289 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Alarm Resources
+
+Parameters:
+  Name:
+    Type: String
+    Description: Alarm Name
+  Actions:
+    Type: CommaDelimitedList
+    Description: An ARN List Of SNS Topics To Post To
+    Default: __NONE__
+  Description:
+    Type: String
+    Description: A Friendly Description Of Alarm
+    Default: __NONE__
+  GreaterThanThreshold:
+    Type: String
+    Description: Determines If Checks Against Statistic Are Greater Than Or Equal To Threshold
+    AllowedValues:
+      - True
+      - False
+  Dimensions0:
+    Type: String
+    Description: A Name:Value Pair Identifying Dimension And Value
+    Default: __NONE__
+  Dimensions1:
+    Type: String
+    Description: A Name:Value Pair Identifying Dimension And Value
+    Default: __NONE__
+  Dimensions2:
+    Type: String
+    Description: A Name:Value Pair Identifying Dimension And Value
+    Default: __NONE__
+  Dimensions3:
+    Type: String
+    Description: A Name:Value Pair Identifying Dimension And Value
+    Default: __NONE__
+  Dimensions4:
+    Type: String
+    Description: A Name:Value Pair Identifying Dimension And Value
+    Default: __NONE__
+  Dimensions5:
+    Type: String
+    Description: A Name:Value Pair Identifying Dimension And Value
+    Default: __NONE__
+  Dimensions6:
+    Type: String
+    Description: A Name:Value Pair Identifying Dimension And Value
+    Default: __NONE__
+  Dimensions7:
+    Type: String
+    Description: A Name:Value Pair Identifying Dimension And Value
+    Default: __NONE__
+  Dimensions8:
+    Type: String
+    Description: A Name:Value Pair Identifying Dimension And Value
+    Default: __NONE__
+  Dimensions9:
+    Type: String
+    Description: A Name:Value Pair Identifying Dimension And Value
+    Default: __NONE__
+  EvaluationPeriods:
+    Type: Number
+    Description: The Number Of Periods Over Which Data Is Compared To The Specified Threshold
+  ExtendedStatistic:
+    Type: String
+    Description: A PN Value Where N Percent Of Observation Will Exceed X(Threshold)
+    Default: __NONE__
+  EvaluateLowSampleCountPercentile:
+    Type: String
+    Description: Determine Whether To Evaluate Alarm Conditions If There Is Not Enough Data
+    Default: ignore
+    AllowedValues:
+      - ignore
+      - evaluate
+  InsufficientDataActions:
+    Type: CommaDelimitedList
+    Description: A List Of ARN SNS Topics When There Is Insufficient Data
+    Default: __NONE__
+  MetricName:
+    Type: String
+    Description: The Name Of Metric Associated To Alarm
+  Namespace:
+    Type: String
+    Description: The Namespace Of Metric
+  OKActions:
+    Type: CommaDelimitedList
+    Description: A List Of ARN SNS Topics When Alarm Transitions To OK
+    Default: __NONE__
+  Period:
+    Type: Number
+    Description: The Time Over Which The Specified Statistic Is Applied
+    Default: 60
+  Statistic:
+    Type: String
+    Description: The Statistic To Apply
+    Default: __NONE__
+  Threshold:
+    Type: Number
+    Description: The Value Against Which The Specified Statistic Is Applied
+  TreatMissingData:
+    Type: String
+    Description: Strategy To Deal With Missing Data
+    Default: ignore
+    AllowedValues:
+      - breaching
+      - notBreaching
+      - ignore
+      - missing
+  Unit:
+    Type: String
+    Description: The Metric Unit
+    Default: None
+
+  LogGroupName:
+    Type: String
+    Description: Name Of Log Group If Applying A Filter Pattern
+    Default: __NONE__
+  FilterPattern:
+    Type: String
+    Description: Pattern To Check Log Group For
+    Default: __NONE__
+
+Conditions:
+  ThereAreActions:
+    Fn::Not:
+      - !Equals [ !Select [ 0, !Ref Actions ],  __NONE__ ]
+  IsDescription:
+    Fn::Not:
+      - !Equals [ !Ref Description, __NONE__ ]
+  IsGreaterThanThreshold: !Equals [ !Ref GreaterThanThreshold, True ]
+  IsDimensions0:
+    Fn::Not:
+      - !Equals [ !Ref Dimensions0, __NONE__ ]
+  IsDimensions1:
+    Fn::Not:
+      - !Equals [ !Ref Dimensions1, __NONE__ ]
+  IsDimensions2:
+    Fn::Not:
+      - !Equals [ !Ref Dimensions2, __NONE__ ]
+  IsDimensions3:
+    Fn::Not:
+      - !Equals [ !Ref Dimensions3, __NONE__ ]
+  IsDimensions4:
+    Fn::Not:
+      - !Equals [ !Ref Dimensions4, __NONE__ ]
+  IsDimensions5:
+    Fn::Not:
+      - !Equals [ !Ref Dimensions5, __NONE__ ]
+  IsDimensions6:
+    Fn::Not:
+      - !Equals [ !Ref Dimensions6, __NONE__ ]
+  IsDimensions7:
+    Fn::Not:
+      - !Equals [ !Ref Dimensions7, __NONE__ ]
+  IsDimensions8:
+    Fn::Not:
+      - !Equals [ !Ref Dimensions8, __NONE__ ]
+  IsDimensions9:
+    Fn::Not:
+      - !Equals [ !Ref Dimensions9, __NONE__ ]
+  IsExtendedStatistic:
+    Fn::Not:
+      - !Equals [ !Ref ExtendedStatistic, __NONE__ ]
+  ThereAreInsufficientDataActions:
+    Fn::Not:
+      - !Equals [ !Select [ 0, !Ref InsufficientDataActions ],  __NONE__ ]
+  ThereAreOKActions:
+    Fn::Not:
+      - !Equals [ !Select [ 0, !Ref OKActions ],  __NONE__ ]
+  IsMetricFilter:
+    Fn::Not:
+      - !Equals [ !Ref LogGroupName, __NONE__ ]
+
+Resources:
+  Alarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: True
+      AlarmActions:
+        Fn::If:
+          - ThereAreActions
+          - !Ref Actions
+          - !Ref AWS::NoValue
+      AlarmDescription:
+        Fn::If:
+          - IsDescription
+          - !Ref Description
+          - !Ref AWS::NoValue
+      AlarmName: !Sub ${Name}-${MetricName}
+      ComparisonOperator: !If [ IsGreaterThanThreshold, GreaterThanOrEqualToThreshold, LessThanOrEqualToThreshold]
+      Dimensions:
+        - Fn::If:
+          - IsDimensions0
+          - Name: !Select [0, !Split [":", !Ref Dimensions0]]
+            Value: !Select [1, !Split [":", !Ref Dimensions0]]
+          - !Ref AWS::NoValue
+        - Fn::If:
+          - IsDimensions1
+          - Name: !Select [0, !Split [":", !Ref Dimensions1]]
+            Value: !Select [1, !Split [":", !Ref Dimensions1]]
+          - !Ref AWS::NoValue
+        - Fn::If:
+          - IsDimensions2
+          - Name: !Select [0, !Split [":", !Ref Dimensions2]]
+            Value: !Select [1, !Split [":", !Ref Dimensions2]]
+          - !Ref AWS::NoValue
+        - Fn::If:
+          - IsDimensions3
+          - Name: !Select [0, !Split [":", !Ref Dimensions3]]
+            Value: !Select [1, !Split [":", !Ref Dimensions3]]
+          - !Ref AWS::NoValue
+        - Fn::If:
+          - IsDimensions4
+          - Name: !Select [0, !Split [":", !Ref Dimensions4]]
+            Value: !Select [1, !Split [":", !Ref Dimensions4]]
+          - !Ref AWS::NoValue
+        - Fn::If:
+          - IsDimensions5
+          - Name: !Select [0, !Split [":", !Ref Dimensions5]]
+            Value: !Select [1, !Split [":", !Ref Dimensions5]]
+          - !Ref AWS::NoValue
+        - Fn::If:
+          - IsDimensions6
+          - Name: !Select [0, !Split [":", !Ref Dimensions6]]
+            Value: !Select [1, !Split [":", !Ref Dimensions6]]
+          - !Ref AWS::NoValue
+        - Fn::If:
+          - IsDimensions7
+          - Name: !Select [0, !Split [":", !Ref Dimensions7]]
+            Value: !Select [1, !Split [":", !Ref Dimensions7]]
+          - !Ref AWS::NoValue
+        - Fn::If:
+          - IsDimensions8
+          - Name: !Select [0, !Split [":", !Ref Dimensions8]]
+            Value: !Select [1, !Split [":", !Ref Dimensions8]]
+          - !Ref AWS::NoValue
+        - Fn::If:
+          - IsDimensions9
+          - Name: !Select [0, !Split [":", !Ref Dimensions9]]
+            Value: !Select [1, !Split [":", !Ref Dimensions9]]
+          - !Ref AWS::NoValue
+      EvaluationPeriods: !Ref EvaluationPeriods
+      ExtendedStatistic:
+        Fn::If:
+          - IsExtendedStatistic
+          - !Ref ExtendedStatistic
+          - !Ref AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+          - ThereAreInsufficientDataActions
+          - !Ref InsufficientDataActions
+          - !Ref AWS::NoValue
+      MetricName: !Ref MetricName
+      Namespace: !Ref Namespace
+      OKActions:
+        Fn::If:
+          - ThereAreOKActions
+          - !Ref OKActions
+          - !Ref AWS::NoValue
+      Period: !Ref Period
+      Statistic:
+        Fn::If:
+          - IsExtendedStatistic
+          - !Ref AWS::NoValue
+          - !Ref Statistic
+      Threshold: !Ref Threshold
+      TreatMissingData: !Ref TreatMissingData
+      Unit: !Ref Unit
+  MetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Condition: IsMetricFilter
+    Properties:
+      LogGroupName: !Ref LogGroupName
+      FilterPattern: !Ref FilterPattern
+      MetricTransformations:
+        -
+          MetricValue: 1
+          MetricNamespace: !Ref Namespace
+          MetricName: !Ref MetricName
+
+Outputs:
+  AlarmArn:
+    Description: Alarm ARN
+    Value: !GetAtt Alarm.Arn
+    Export:
+      Name: !Sub AlarmArn${Name}${MetricName}

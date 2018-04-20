@@ -1,0 +1,137 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: ALB Target Group
+
+Parameters:
+  Name:
+    Type: String
+    Description: AWS ECS Cluster Name
+  VpcId:
+    Type: String
+    Description: VPC ID That Target Group Will Be Added To
+  Port:
+    Type: Number
+    Description: Target Group Port
+  Protocol:
+    Type: String
+    Description: Target Group's Service Protocol
+    Default: HTTP
+    AllowedValues:
+      - HTTP
+      - HTTPS
+  HealthCheckCode:
+    Type: String
+    Description: Health Check Response/Status Code
+    Default: 200-299
+  HealthCheckPath:
+    Type: String
+    Description: Health Check Resource Path
+    Default: /
+  HealthCheckIntervalSeconds:
+    Type: Number
+    Description: The Approximate Number Of Seconds Between Health Checks
+    Default: 10
+  HealthCheckThresholdCount:
+    Type: Number
+    Description: The Number Of Consecutive Health Checks Needed To Determine Service Health
+    Default: 3
+  TargetType:
+    Type: String
+    Description: The Registration Type Of Target Group; Fargate Requires IP
+    Default: ip
+    AllowedValues:
+      - ip
+      - instance
+  LoadBalancerArn:
+    Type: String
+    Description: The ALB ARN That Target Group Will Be Associated To
+  CertificateArn:
+    Type: String
+    Description: The SSL CA Certificate ARN Used For HTTPS Connections
+    Default: __NONE__
+  Target:
+    Type: String
+    Description: The Target Registered To This Group Which Is Either A EC2 ID Or IP
+    Default: __NOTIMPLEMENTED__
+
+Conditions:
+  HttpsEnabled:
+    Fn::Not:
+      - Fn::Equals:
+        - !Ref CertificateArn
+        - __NONE__
+  HttpEnabled:
+    Fn::Equals:
+      - !Ref CertificateArn
+      - __NONE__
+
+Resources:
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VpcId
+      Port: !Ref Port
+      Protocol: !Ref Protocol
+      Matcher:
+        HttpCode: !Ref HealthCheckCode
+      HealthCheckIntervalSeconds: !Ref HealthCheckIntervalSeconds
+      HealthCheckPath: !Ref HealthCheckPath
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: !Ref HealthCheckThresholdCount
+      UnhealthyThresholdCount: !Ref HealthCheckThresholdCount
+      Name: !Ref Name
+      TargetGroupAttributes:
+      - Key: deregistration_delay.timeout_seconds
+        Value: '60'
+      TargetType: !Ref TargetType
+
+
+  HttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HttpEnabled
+    DependsOn:
+      - TargetGroup
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref LoadBalancerArn
+      Port: 80
+      Protocol: HTTP
+
+  HttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HttpsEnabled
+    DependsOn:
+      - TargetGroup
+    Properties:
+      DefaultActions:
+        - TargetGroupArn:
+            Ref: TargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref LoadBalancerArn
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref CertificateArn
+
+Outputs:
+  TargetGroupArn:
+    Description: Target Group ARN
+    Value: !Ref TargetGroup
+    Export:
+      Name: !Sub TargetGroupArn${Name}
+  TargetGroupHttpListenerArn:
+    Description: Target Group HTTP Listener ARN
+    Condition: HttpEnabled
+    Value: !Ref HttpListener
+    Export:
+      Name: !Sub TargetGroupHttpListenerArn${Name}
+  TargetGroupHttpsListenerArn:
+    Description: Target Group HTTPS Listener ARN
+    Condition: HttpsEnabled
+    Value: !Ref HttpsListener
+    Export:
+      Name: !Sub TargetGroupHttpsListenerArn${Name}

@@ -1,0 +1,98 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: A Role
+
+Parameters:
+  Name:
+    Type: String
+    Description: Role Name
+  Groups:
+    Type: CommaDelimitedList
+    Description: List Of Group Ids/Arns To Attach User To
+    Default: __NONE__
+  Policies:
+    Type: CommaDelimitedList
+    Description: List Of Managed Policy Arns To Attach To User
+    Default: __NONE__
+  Services:
+    Type: CommaDelimitedList
+    Description: List Of Services This Role Can Be Trusted To Interact With
+    Default: __NONE__
+  Accounts:
+    Type: CommaDelimitedList
+    Description: List Of Accounts This Role Can Be Trusted To Interact With
+    Default: __NONE__
+
+Conditions:
+  ThereAreGroups:
+    Fn::Not:
+      - Fn::Equals:
+        - !Select [ 0, !Ref Groups ]
+        - __NONE__
+  ThereArePolicies:
+    Fn::Not:
+      - Fn::Equals:
+        - !Select [ 0, !Ref Policies ]
+        - __NONE__
+  ThereAreServices:
+    Fn::Not:
+      - Fn::Equals:
+        - !Select [ 0, !Ref Services ]
+        - __NONE__
+  ThereAreAccounts:
+    Fn::Not:
+      - Fn::Equals:
+        - !Select [ 0, !Ref Accounts ]
+        - __NONE__
+
+Resources:
+  Role:
+    Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    Properties:
+      ManagedPolicyArns:
+        Fn::If:
+          - ThereArePolicies
+          - !Ref Policies
+          - !Ref AWS::NoValue
+      RoleName: !Ref Name
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                Fn::If:
+                  - ThereAreServices
+                  - !Ref Services
+                  - !Ref AWS::NoValue
+              AWS:
+                Fn::If:
+                  - ThereAreAccounts
+                  - !Ref Accounts
+                  - - !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action:
+              - "sts:AssumeRole"
+
+  AssumeRolePolicy:
+    Type: AWS::IAM::Policy
+    Condition: ThereAreGroups
+    Properties:
+      Groups: !Ref Groups
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Resource:
+              - !GetAtt Role.Arn
+            Effect: Allow
+      PolicyName: !Sub AssumeRole${Name}
+
+Outputs:
+  RoleArn:
+    Description: Role ARN
+    Value: !GetAtt Role.Arn
+    Export:
+      Name: !Sub RoleArn${Name}

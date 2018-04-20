@@ -1,0 +1,67 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: A User
+
+Parameters:
+  Name:
+    Type: String
+    Description: User Name
+  Groups:
+    Type: CommaDelimitedList
+    Description: List Of Group Ids/Arns To Attach User To
+    Default: __NONE__
+  Policies:
+    Type: CommaDelimitedList
+    Description: List Of Managed Policy Arns To Attach To User
+    Default: __NONE__
+  Password:
+    Type: String
+    Description: A Password To Attach To User
+    Default: __NONE__
+
+Conditions:
+  ThereAreGroups:
+    Fn::Not:
+      - Fn::Equals:
+        - !Select [ 0, !Ref Groups ]
+        - __NONE__
+  ThereArePolicies:
+    Fn::Not:
+      - Fn::Equals:
+        - !Select [ 0, !Ref Policies ]
+        - __NONE__
+  HasConsoleAccess:
+    Fn::Not:
+      - Fn::Equals:
+        - !Ref Password
+        - __NONE__
+
+Resources:
+  User:
+    Type: AWS::IAM::User
+    DeletionPolicy: Delete
+    Properties:
+      Groups:
+        Fn::If:
+          - ThereAreGroups
+          - !Ref Groups
+          - !Ref AWS::NoValue
+      ManagedPolicyArns:
+        Fn::If:
+          - ThereArePolicies
+          - !Ref Policies
+          - !Ref AWS::NoValue
+      UserName: !Ref Name
+      LoginProfile:
+        Fn::If:
+          - HasConsoleAccess
+          - - Password: !Ref Password
+            - PasswordResetRequired: True
+          - !Ref AWS::NoValue
+
+Outputs:
+  UserArn:
+    Description: User ARN
+    Value: !GetAtt User.Arn
+    Export:
+      Name: !Sub UserArn${Name}

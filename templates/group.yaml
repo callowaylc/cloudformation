@@ -1,0 +1,52 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: A Group
+
+Parameters:
+  Name:
+    Type: String
+    Description: Group Name
+  Groups:
+    Type: CommaDelimitedList
+    Description: List Of Group Ids/Arns To Attach User To
+    Default: __NONE__
+  Policies:
+    Type: CommaDelimitedList
+    Description: List Of Managed Policy Arns To Attach To User
+    Default: __NONE__
+
+Conditions:
+  ThereAreGroups:
+    Fn::Not:
+      - Fn::Equals:
+        - !Select [ 0, !Ref Groups ]
+        - __NONE__
+  ThereArePolicies:
+    Fn::Not:
+      - Fn::Equals:
+        - !Select [ 0, !Ref Policies ]
+        - __NONE__
+
+Resources:
+  Group:
+    Type: AWS::IAM::Group
+    DeletionPolicy: Delete
+    Properties:
+      Groups:
+        Fn::If:
+          - ThereAreGroups
+          - !Ref Groups
+          - !Ref AWS::NoValue
+      ManagedPolicyArns:
+        Fn::If:
+          - ThereArePolicies
+          - !Ref Policies
+          - !Ref AWS::NoValue
+      GroupName: !Ref Name
+
+Outputs:
+  GroupArn:
+    Description: Group ARN
+    Value: !GetAtt Group.Arn
+    Export:
+      Name: !Sub GroupArn${Name}

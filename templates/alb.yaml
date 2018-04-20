@@ -1,0 +1,165 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Application Load Balancer
+
+Parameters:
+  Name:
+    Type: String
+    Description: ALB Identifying Name
+  AccessLogsEnabled:
+    Type: String
+    Description: Determines If Access Logs Will Be Written To Bucket
+    Default: True
+    AllowedValues:
+      - True
+      - False
+  AlarmsEnabled:
+    Type: String
+    Description: Enables Basic Alarms Against The Loadbalancer
+    Default: True
+    AllowedValues:
+      - True
+      - False
+  AlbPrincipalId:
+    Type: String
+    Description: The ALB Principal ID For A given Region
+    Default: 127311923021
+  Internal:
+    Type: String
+    Description: Specifies Whether ALB Is Internal Or Facing Internet
+    Default: False
+    AllowedValues:
+      - True
+      - False
+  SecurityGroups:
+    Type: CommaDelimitedList
+    Description: The Security Groups Attached To This ALB
+  Subnets:
+    Type: CommaDelimitedList
+    Description: The Subnets Attached To This ALB
+
+Conditions:
+  IsInternal:
+    Fn::Equals:
+      - !Ref Internal
+      - True
+  IsAccessLogsEnabled:
+    Fn::Equals:
+      - !Ref AccessLogsEnabled
+      - True
+  IsAlarmsEnabled:
+    Fn::Equals:
+      - !Ref AlarmsEnabled
+      - True
+
+Resources:
+  Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Condition: IsAccessLogsEnabled
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub cloudformation-logs-alb-${Name}
+      Tags:
+        -
+          Key: Stack
+          Value: !Ref AWS::StackName
+
+  BucketPolicy:
+    Type: "AWS::S3::BucketPolicy"
+    DependsOn:
+      - Bucket
+    Condition: IsAccessLogsEnabled
+    Properties:
+      Bucket: !Ref Bucket
+      PolicyDocument:
+        Statement:
+        - Action:
+            - s3:PutObject
+          Effect: Allow
+          Resource: !Sub arn:aws:s3:::${Bucket}/*
+          Principal:
+            AWS:
+              - !Ref AlbPrincipalId
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DeletionPolicy: Delete
+    Properties:
+      Scheme:
+        Fn::If:
+          - IsInternal
+          - Internal
+          - internet-facing
+      SecurityGroups: !Ref SecurityGroups
+      Subnets: !Ref Subnets
+      LoadBalancerAttributes:
+        - Key: access_logs.s3.enabled
+          Value: !Ref AccessLogsEnabled
+        - Key: access_logs.s3.bucket
+          Value:
+            Fn::If:
+              - IsAccessLogsEnabled
+              - !Sub cloudformation-logs-alb-${Name}
+              - !Ref AWS::NoValue
+      Tags:
+        - Key: Stack
+          Value: !Ref AWS::StackName
+
+  AlarmELB5XX:
+    Condition: IsAlarmsEnabled
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Application load balancer returns 5XX HTTP status codes
+      Namespace: AWS/ApplicationELB
+      MetricName: HTTPCode_ELB_5XX_Count
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      ComparisonOperator: GreaterThanThreshold
+      Threshold: 0
+      Dimensions:
+      - Name: LoadBalancer
+        Value: !GetAtt LoadBalancer.LoadBalancerFullName
+
+  AlarmELBTarget5XX:
+    Condition: IsAlarmsEnabled
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Application load balancer receives 5XX HTTP status codes from targets
+      Namespace: AWS/ApplicationELB
+      MetricName: HTTPCode_Target_5XX_Count
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      ComparisonOperator: GreaterThanThreshold
+      Threshold: 0
+      Dimensions:
+      - Name: LoadBalancer
+        Value: !GetAtt 'LoadBalancer.LoadBalancerFullName'
+
+Outputs:
+  LoadBalancerArn:
+    Description: Load Balancer ARN
+    Value: !Ref LoadBalancer
+    Export:
+      Name: !Sub LoadBalancerArn${Name}
+  BucketArn:
+    Description: ALB Logs Bucket ARN
+    Condition: IsAccessLogsEnabled
+    Value: !GetAtt Bucket.Arn
+    Export:
+      Name: !Sub LoadBalancerLogsBucketArn${Name}
+  AlarmELB5XXArn:
+    Description: ALB 5XX Alarms
+    Condition: IsAlarmsEnabled
+    Value: !GetAtt AlarmELB5XX.Arn
+    Export:
+      Name: !Sub AlarmELB5XXArn${Name}
+  AlarmELBTarget5XXArn:
+    Description: ALB Target 5XX Alarms
+    Condition: IsAlarmsEnabled
+    Value: !GetAtt AlarmELBTarget5XX.Arn
+    Export:
+      Name: !Sub AlarmELBTarget5XXArn${Name}

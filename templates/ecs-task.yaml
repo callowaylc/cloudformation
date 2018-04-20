@@ -1,0 +1,406 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: ECS Task Definition
+
+Parameters:
+  Name:
+    Type: String
+    Description: AWS ECS Task Name
+  ClusterArn:
+    Type: String
+    Description: AWS ECS Cluster Arn
+  Command:
+    Type: CommaDelimitedList
+    Description: Command To Pass To Container
+    Default: __NONE__
+  DockerImage:
+    Type: String
+    Description: Docker Image Repository URL
+  DockerTag:
+    Type: String
+    Description: Docker Image Tag
+    Default: latest
+  DockerCpu:
+    Type: Number
+    Description: Reserved Docker CPU
+    Default: 256
+    AllowedValues:
+      - 256
+      - 512
+      - 1024
+      - 2048
+      - 4096
+  DockerMemory:
+    Type: String
+    Description: Reserved Docker Memory
+    Default: 0.5GB
+    AllowedValues:
+      - 0.5GB
+      - 1GB
+      - 2GB
+      - 3GB
+      - 4GB
+  Port:
+    Type: Number
+    Description: Application Port
+    Default: 0
+  Schedule:
+    Type: String
+    Description: A Cron Formatted Schedule To Run Task
+    Default: __NONE__
+  ScheduledCount:
+    Type: Number
+    Description: The Number Of Scheduled Tasks To Run
+    Default: 1
+  Subnets:
+    Type: CommaDelimitedList
+    Description: The Subnets Where Service Will Run
+    Default: __NONE__
+  OneOff:
+    Type: String
+    Description: Determines If Task Is Intended As A One And done
+    Default: False
+    AllowedValues:
+      - True
+      - False
+  OneOffCacheBuster:
+    Type: String
+    Description: Forces Execution Of Lambda Function By Passing In Timestamp
+    Default: __NONE__
+  LogRetention:
+    Type: Number
+    Description: The Number Of Days Logs Will Be Retained
+    Default: 7
+  Env0:
+    Type: String
+    Description: A Name:Value Pair To Pass As Environment Variable To Container
+    Default: __NONE__
+  Env1:
+    Type: String
+    Description: A Name:Value Pair To Pass As Environment Variable To Container
+    Default: __NONE__
+  Env2:
+    Type: String
+    Description: A Name:Value Pair To Pass As Environment Variable To Container
+    Default: __NONE__
+  Env3:
+    Type: String
+    Description: A Name:Value Pair To Pass As Environment Variable To Container
+    Default: __NONE__
+  Env4:
+    Type: String
+    Description: A Name:Value Pair To Pass As Environment Variable To Container
+    Default: __NONE__
+  Env5:
+    Type: String
+    Description: A Name:Value Pair To Pass As Environment Variable To Container
+    Default: __NONE__
+  Env6:
+    Type: String
+    Description: A Name:Value Pair To Pass As Environment Variable To Container
+    Default: __NONE__
+  Env6:
+    Type: String
+    Description: A Name:Value Pair To Pass As Environment Variable To Container
+    Default: __NONE__
+  Env7:
+    Type: String
+    Description: A Name:Value Pair To Pass As Environment Variable To Container
+    Default: __NONE__
+  Env8:
+    Type: String
+    Description: A Name:Value Pair To Pass As Environment Variable To Container
+    Default: __NONE__
+  Env9:
+    Type: String
+    Description: A Name:Value Pair To Pass As Environment Variable To Container
+    Default: __NONE__
+
+Conditions:
+  IsScheduled:
+    Fn::Not:
+      - !Equals [ !Ref Schedule, __NONE__ ]
+  IsOneOff:
+    !Equals [ !Ref OneOff, True ]
+  BustCache:
+    Fn::Not:
+      - !Equals [ !Ref OneOffCacheBuster, __NONE__ ]
+  CommandSpecified:
+    Fn::Not:
+      - !Equals [ !Select [ 0, !Ref Command ],  __NONE__ ]
+  PortSpecified:
+    Fn::Not:
+      - !Equals [ !Ref Port, 0 ]
+  IsEnv0:
+    Fn::Not:
+      - !Equals [ !Ref Env0, __NONE__ ]
+  IsEnv1:
+    Fn::Not:
+      - !Equals [ !Ref Env1, __NONE__ ]
+  IsEnv2:
+    Fn::Not:
+      - !Equals [ !Ref Env2, __NONE__ ]
+  IsEnv3:
+    Fn::Not:
+      - !Equals [ !Ref Env3, __NONE__ ]
+  IsEnv4:
+    Fn::Not:
+      - !Equals [ !Ref Env4, __NONE__ ]
+  IsEnv5:
+    Fn::Not:
+      - !Equals [ !Ref Env5, __NONE__ ]
+  IsEnv6:
+    Fn::Not:
+      - !Equals [ !Ref Env6, __NONE__ ]
+  IsEnv7:
+    Fn::Not:
+      - !Equals [ !Ref Env7, __NONE__ ]
+  IsEnv8:
+    Fn::Not:
+      - !Equals [ !Ref Env8, __NONE__ ]
+  IsEnv9:
+    Fn::Not:
+      - !Equals [ !Ref Env9, __NONE__ ]
+
+Resources:
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub ${AWS::StackName}/${Name}/ecs/task
+      RetentionInDays: !Ref LogRetention
+
+  Task:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Cpu: !Ref DockerCpu
+      Memory: !Ref DockerMemory
+      Family: !Sub ${AWS::StackName}-${Name}
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/ecsTaskExecutionRole
+      TaskRoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/ecsTaskExecutionRole
+      NetworkMode: awsvpc
+      ContainerDefinitions:
+        -
+          Command:
+            Fn::If:
+              - CommandSpecified
+              - !Ref Command
+              - !Ref AWS::NoValue
+          Essential: True
+          Name: !Ref Name
+          Image: !Sub ${DockerImage}:${DockerTag}
+          PortMappings:
+            -
+              Fn::If:
+                - PortSpecified
+                - ContainerPort: !Ref Port
+                  HostPort: !Ref Port
+                - !Ref AWS::NoValue
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: docker
+          Environment:
+            -
+              Name: PORT
+              Value: !Ref Port
+            - Fn::If:
+                - IsEnv0
+                - Name: !Select [0, !Split [":", !Ref Env0]]
+                  Value: !Select [1, !Split [":", !Ref Env0]]
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsEnv1
+                - Name: !Select [0, !Split [":", !Ref Env1]]
+                  Value: !Select [1, !Split [":", !Ref Env1]]
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsEnv2
+                - Name: !Select [0, !Split [":", !Ref Env2]]
+                  Value: !Select [1, !Split [":", !Ref Env2]]
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsEnv3
+                - Name: !Select [0, !Split [":", !Ref Env3]]
+                  Value: !Select [1, !Split [":", !Ref Env3]]
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsEnv4
+                - Name: !Select [0, !Split [":", !Ref Env4]]
+                  Value: !Select [1, !Split [":", !Ref Env4]]
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsEnv5
+                - Name: !Select [0, !Split [":", !Ref Env5]]
+                  Value: !Select [1, !Split [":", !Ref Env5]]
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsEnv6
+                - Name: !Select [0, !Split [":", !Ref Env6]]
+                  Value: !Select [1, !Split [":", !Ref Env6]]
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsEnv7
+                - Name: !Select [0, !Split [":", !Ref Env7]]
+                  Value: !Select [1, !Split [":", !Ref Env7]]
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsEnv8
+                - Name: !Select [0, !Split [":", !Ref Env8]]
+                  Value: !Select [1, !Split [":", !Ref Env8]]
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsEnv9
+                - Name: !Select [0, !Split [":", !Ref Env9]]
+                  Value: !Select [1, !Split [":", !Ref Env9]]
+                - !Ref AWS::NoValue
+
+  TaskSchedule:
+    Type: AWS::Events::Rule
+    DependsOn:
+      - Task
+    Condition: IsScheduled
+    Properties:
+      Description: A
+      Name: !Ref Name
+      ScheduleExpression: !Sub cron(${Schedule})
+      State: ENABLED
+      Targets:
+      - Id: !Sub scheduled-task-${Name}
+        RoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/ecsTaskExecutionRole
+        EcsParameters:
+          TaskDefinitionArn: !Ref Task
+          TaskCount: !Ref ScheduledCount
+        Arn: !Ref ClusterArn
+
+  TaskOneOffRunner:
+    Type: AWS::Lambda::Function
+    Condition: IsOneOff
+    DependsOn:
+      - TaskOneOffRole
+      - TaskOneOffLogGroup
+    Properties:
+      Description: !Sub ${AWS::StackName} ${Name} ECS OneOff
+      Handler: index.handler
+      Runtime: python3.6
+      Timeout: 30
+      Role: !GetAtt TaskOneOffRole.Arn
+      FunctionName: !Sub ${Name}-OneOff
+      Code:
+        S3Bucket: !ImportValue BucketNameLambda
+        S3Key: lambda-ecs-tasks.zip
+
+  TaskOneOffCaller:
+    Type: Custom::Caller
+    Condition: IsOneOff
+    Properties:
+      ServiceToken: !GetAtt TaskOneOffRunner.Arn
+      __CacheBuster__: !If [ BustCache, !Ref OneOffCacheBuster, "" ]
+      Action: RunTask
+      TaskDefinition: !Ref Task
+      Cluster: !Ref ClusterArn
+      NetworkConfiguration:
+        awsvpcConfiguration:
+          subnets: !Ref Subnets
+
+  TaskOneOffLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: IsOneOff
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${Name}-OneOff
+      RetentionInDays: !Ref LogRetention
+
+  TaskOneOffRole:
+    Type: AWS::IAM::Role
+    Condition: IsOneOff
+    DependsOn:
+      - Task
+      - TaskOneOffLogGroup
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+              - lambda.amazonaws.com
+              - ecs.amazonaws.com
+              - ecs-tasks.amazonaws.com
+          Action:
+            - sts:AssumeRole
+      Policies:
+      - PolicyName: !Sub Lambda${Name}
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Sid: Self
+            Effect: Allow
+            Action:
+              - lambda:*
+            Resource: '*'
+          - Sid: EcsTasks
+            Effect: Allow
+            Action:
+              - ecs:DescribeTasks
+              - ecs:ListTasks
+              - ecs:RunTask
+              - ecs:StartTask
+              - ecs:StopTask
+              - ecs:DescribeContainerInstances
+              - ecs:ListContainerInstances
+            Resource: !Ref Task
+          - Sid: !Sub IamPassRole
+            Effect: Allow
+            Action:
+              - iam:PassRole
+            Resource: !Sub arn:aws:iam::${AWS::AccountId}:role/ecsTaskExecutionRole
+          - Sid: !Sub StackStatus${Name}
+            Effect: Allow
+            Action:
+              - cloudformation:DescribeStacks
+            Resource:
+              Ref: AWS::StackId
+          - Sid: !Sub CreateLambdaLogs${Name}
+            Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:DescribeLogStreams
+              - logs:PutLogEvents
+            Resource: !GetAtt TaskOneOffLogGroup.Arn
+
+Outputs:
+  TaskArn:
+    Description: Task ARN
+    Value: !Ref Task
+    Export:
+      Name: !Sub TaskArn${Name}
+  TaskScheduleArn:
+    Condition: IsScheduled
+    Description: Task Schedule ARN
+    Value: !GetAtt TaskSchedule.Arn
+    Export:
+      Name: !Sub TaskScheduleArn${Name}
+  TaskOneOffRunnerArn:
+    Condition: IsOneOff
+    Description: Task One Off Runner ARN
+    Value: !GetAtt TaskOneOffRunner.Arn
+    Export:
+      Name: !Sub TaskOneOffRunnerArn${Name}
+  TaskOneOffRole:
+    Condition: IsOneOff
+    Description: Task One Off Role ARN
+    Value: !GetAtt TaskOneOffRole.Arn
+    Export:
+      Name: !Sub TaskOneOffRoleArn${Name}
+  TaskOneOffLogGroup:
+    Condition: IsOneOff
+    Description: Task One Off LogGroup ARN
+    Value: !GetAtt TaskOneOffLogGroup.Arn
+    Export:
+      Name: !Sub TaskOneOffLogGroupArn${Name}

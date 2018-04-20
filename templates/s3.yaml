@@ -1,0 +1,49 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: S3 Bucket and Policy stack
+
+Parameters:
+  Name:
+    Type: String
+    Description: S3 Bucket Name
+  LogRetention:
+    Type: Number
+    Description: Log retention in days
+    Default: "30"
+  BucketDeletionPolicy:
+    Type: String
+    Description: S3 Bucket Deletion Policy
+    Default: "Retain"
+    AllowedValues:
+      - "Delete"
+      - "Retain"
+  LogDeletionPolicy:
+    Type: String
+    Description: S3 Log Deletion Policy
+    Default: "Retain"
+    AllowedValues:
+      - "Delete"
+      - "Retain"
+
+Resources:
+  Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      BucketName:
+        Ref: Name
+      AccessControl: AuthenticatedRead
+      Tags:
+        -
+          Key: Name
+          Value: !Ref Name
+        - Key: Stack
+          Value: !Ref AWS::StackName
+
+Outputs:
+  BucketArn:
+    Description: Bucket ARN
+    Value: !GetAtt Bucket.Arn
+    Export:
+      Name: !Sub BucketArn${Name}

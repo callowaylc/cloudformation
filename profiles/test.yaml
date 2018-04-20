@@ -1,0 +1,22 @@
+Account: 722373557040
+Role: arn:aws:iam::722373557040:role/cloudformation
+Region: us-east-1
+Template: sanity.yaml.j2
+Stack: Sanity
+Inputs:
+  Name: sanity
+  DockerImage: nginx
+  DockerTag: {{ ENV.TAG|default("latest") }}
+  Port: "80"
+  SubnetsExportName: SubnetIdsBootstrap
+  VpcIdExportName: VpcIdBootstrap
+  DatabaseUsername: /application/cocoon/database/username
+  DatabasePassword: /application/cocoon/database/password
+
+Config:
+  Alb:
+    SecurityGroupIngressPorts:
+      - 80
+      - 443
+    SecurityGroupEgressPorts:
+      - 80

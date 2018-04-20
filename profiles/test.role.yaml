@@ -1,0 +1,9 @@
+Account: 722373557042
+Role: arn:aws:iam::722373557042:role/cloudformation
+Region: us-east-1
+Capabilities: True
+Template: role.yaml
+Stack: TestRole
+Inputs:
+  Name: test
+  Groups: test

@@ -1,0 +1,91 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: ECS Service Definition
+
+Parameters:
+  Name:
+    Type: String
+    Description: AWS ECS Service Name
+  ClusterArn:
+    Type: String
+    Description: AWS ECS Cluster Arn
+  DesiredCount:
+    Type: Number
+    Description: Number Of Redundant Tasks
+    Default: 1
+  MinimumHealthyPercent:
+    Type: Number
+    Description: Minimum Healthy Tasks During Rolling Update
+    Default: 50
+  MaximumPercent:
+    Type: Number
+    Description: Maximum Number Tasks During Rolling Update
+    Default: 200
+  TaskDefinitionArn:
+    Type: String
+    Description: The Task Definition To Associated Service To
+  Subnets:
+    Type: CommaDelimitedList
+    Description: The Subnets Where Service Will Run
+  SecurityGroups:
+    Type: CommaDelimitedList
+    Description: The Security Groups Attached To Service
+  Port:
+    Type: Number
+    Description: The Application Port
+    Default: 0
+  TargetGroupArn:
+    Type: String
+    Description: The Target Group ARN If Using An ALB
+    Default: __NONE__
+
+Conditions:
+  IsLoadBalanced:
+    Fn::Not:
+      - Fn::Equals:
+        - !Ref TargetGroupArn
+        - __NONE__
+
+
+Resources:
+  Service:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName:
+        Ref: Name
+      Cluster:
+        Ref: ClusterArn
+      TaskDefinition:
+        Ref: TaskDefinitionArn
+      DesiredCount:
+        Ref: DesiredCount
+      DeploymentConfiguration:
+          MinimumHealthyPercent:
+            Ref: MinimumHealthyPercent
+          MaximumPercent:
+            Ref: MaximumPercent
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+            Ref: Subnets
+          SecurityGroups:
+            Ref: SecurityGroups
+      LoadBalancers:
+        - Fn::If:
+          - IsLoadBalanced
+          - ContainerName: !Sub ${Name}
+            ContainerPort: !Ref Port
+            TargetGroupArn: !Ref TargetGroupArn
+          - !Ref AWS::NoValue
+
+Outputs:
+  ServiceArn:
+    Description: Service ARN
+    Value:
+      Ref: Service
+    Export:
+      Name:
+        Fn::Sub: ServiceArn${Name}

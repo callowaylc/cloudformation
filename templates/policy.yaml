@@ -1,0 +1,98 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: A Policy
+
+Parameters:
+  Name:
+    Type: String
+    Description: Policy Name
+  Groups:
+    Type: CommaDelimitedList
+    Description: List Of Group Ids/Arns To Attach Policy To
+    Default: __NONE__
+  Users:
+    Type: CommaDelimitedList
+    Description: List Of User Ids/Arns To Attach Policy To
+    Default: __NONE__
+  Roles:
+    Type: CommaDelimitedList
+    Description: List Of Role Ids/Arns To Attach Policy To
+    Default: __NONE__
+  Actions:
+    Type: CommaDelimitedList
+    Description: Policy Actions To Apply
+  Resources:
+    Type: CommaDelimitedList
+    Description: Resources To Which Actions Will Be Applied
+  Allow:
+    Type: String
+    Description: A Boolean To Determine If Policy Will Allow/Deny Actions Against Resources
+    Default: "False"
+    AllowedValues:
+      - "True"
+      - "False"
+
+Conditions:
+  ThereAreGroups:
+    Fn::Not:
+      - Fn::Equals:
+        - !Select [ 0, !Ref Groups ]
+        - __NONE__
+  ThereAreUsers:
+    Fn::Not:
+      - Fn::Equals:
+        - !Select [ 0, !Ref Users ]
+        - __NONE__
+  ThereAreRoles:
+    Fn::Not:
+      - Fn::Equals:
+        - !Select [ 0, !Ref Roles ]
+        - __NONE__
+  Allowed:
+    Fn::Equals:
+      - !Ref Allow
+      - True
+
+Resources:
+  Policy:
+    Type: AWS::IAM::Policy
+    DeletionPolicy: Delete
+    Properties:
+      Groups:
+        Fn::If:
+          - ThereAreGroups
+          - !Ref Groups
+          - !Ref AWS::NoValue
+      Users:
+        Fn::If:
+          - ThereAreUsers
+          - !Ref Users
+          - !Ref AWS::NoValue
+      Users:
+        Fn::If:
+          - ThereAreUsers
+          - !Ref Users
+          - !Ref AWS::NoValue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid:
+              Fn::Join:
+                - ""
+                - - !If [Allowed, Allow, Deny]
+                  - !Ref Name
+            Action: !Ref Actions
+            Resource: !Ref Resources
+            Effect:
+              Fn::If:
+                - Allowed
+                - Allow
+                - Deny
+      PolicyName: !Sub ${AWS::StackName}-${Name}
+
+Outputs:
+  PolicyId:
+    Description: Policy ID
+    Value: !Ref Policy
+    Export:
+      Name: !Sub PolicyId${Name}

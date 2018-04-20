@@ -1,0 +1,55 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Security Group Ingress
+
+Parameters:
+  Name:
+    Type: String
+    Description: Security Group Identifying Name
+  IpProtocol:
+    Type: String
+    Description: IP Protocol
+    Default: tcp
+    AllowedValues:
+      - tcp
+      - udp
+      - icmp
+  Port:
+    Type: Number
+    Description: Port To Map Against Ingress
+  SecurityGroupId:
+    Type: String
+    Description: VPC That Security Group Exists
+  DestinationSecurityGroupId:
+    Type: String
+    Description: A Destination Security Group
+    Default: __NONE__
+  CidrIp:
+    Type: String
+    Description: A CIDR IPv4 Range
+    Default: __NONE__
+
+Conditions:
+  IsSecurityGroupId:
+    Fn::Not:
+      - !Equals [ !Ref DestinationSecurityGroupId, __NONE__ ]
+
+Resources:
+  Egress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref SecurityGroupId
+      IpProtocol: !Ref IpProtocol
+      FromPort: !Ref Port
+      ToPort: !Ref Port
+      CidrIp:
+        Fn::If:
+          - IsSecurityGroupId
+          - !Ref AWS::NoValue
+          - !Ref CidrIp
+      DestinationSecurityGroupId:
+        Fn::If:
+          - IsSecurityGroupId
+          - !Ref DestinationSecurityGroupId
+          - !Ref AWS::NoValue

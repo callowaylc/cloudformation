@@ -1,0 +1,11 @@
+Account: 123122373553421123
+Role: arn:aws:iam::23123123543:role/cloudformation
+Region: us-east-1
+Template: bootstrap.yaml.j2
+Stack: Bootstrap
+Inputs:
+  Organization: cloudformation
+  Name: cloudformation
+  CidrBlockVpc: 10.1.0.0/16
+  CidrBlockSubnet1: 10.1.1.0/24
+  CidrBlockSubnet2: 10.1.2.0/24

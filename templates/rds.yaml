@@ -1,0 +1,141 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: RDS Instance
+
+Parameters:
+  Name:
+    Type: String
+    Description: S3 Bucket Name
+  Username:
+    Type: String
+    Description: RDS Master Username Parameter Store Path
+  Password:
+    Type: String
+    Description: RDS Master Username Parameter Store Path
+  Engine:
+    Type: String
+    Description: Databse Engine
+    Default: postgres
+    AllowedValues:
+      - postgres
+      - mysql
+      - aurora
+  EngineVersion:
+    Type: String
+    Description: Software Version Of Database Engine
+    Default: 9.6
+  SecurityGroupIds:
+    Type: CommaDelimitedList
+    Description: Security Groups Attached To Database Instance
+  Subnets:
+    Type: CommaDelimitedList
+    Description: Subnets That Database Instance Will Operate In
+  AllocatedStorage:
+    Type: Number
+    Description: The Allocated Store Specified In Gigabytes
+    Default: 5
+  MultiAZ:
+    Type: String
+    Description: Determines If RDS Is Replicated MultiAZ
+    Default: False
+    AllowedValues:
+      - True
+      - False
+  MonitoringRoleArn:
+    Type: String
+    Description: The Role ARN Used To Write Enhanced Metrics To Cloudwatch
+    Default: __NONE__
+  StorageEncrypted:
+    Type: String
+    Description: Determined If Data Is Encrypted With KMS Key
+    Default: True
+    AllowedValues:
+      - True
+      - False
+  KmsKeyId:
+    Type: String
+    Description: The KMS Key Used To Encrypt Data
+    Default: __NONE__
+  DBInstanceClass:
+    Type: String
+    Description: The Instance Size Used For Database
+    Default: db.m3.medium
+  Port:
+    Type: Number
+    Description: Database Instance Port
+    Default: 5432
+
+Conditions:
+  IsStorageEncrypted:
+    Fn::Equals:
+      - !Ref StorageEncrypted
+      - True
+  IsMonitored:
+    Fn::Not:
+      - Fn::Equals:
+          - !Ref MonitoringRoleArn
+          - __NONE__
+
+Resources:
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: !Sub Subnet Group For RDS ${Name}
+      DBSubnetGroupName: !Sub ${AWS::StackName}-${Name}
+      SubnetIds: !Ref Subnets
+      Tags:
+        - Key: Name
+          Value: !Ref Name
+
+  Database:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllocatedStorage: !Ref AllocatedStorage
+      DBInstanceClass: !Ref DBInstanceClass
+      DBInstanceIdentifier: !Sub ${AWS::StackName}-${Name}
+      DBName: !Ref Name
+      Engine: !Ref Engine
+      Port: !Ref Port
+      EngineVersion: !Ref EngineVersion
+      MasterUsername: !Ref Username
+      MasterUserPassword: !Ref Password
+      MonitoringInterval:
+        Fn::If:
+          - IsMonitored
+          - 10
+          - 0
+      MonitoringRoleArn:
+        Fn::If:
+          - IsMonitored
+          - !Ref MonitoringRoleArn
+          - !Ref AWS::NoValue
+      StorageEncrypted: !Ref StorageEncrypted
+      KmsKeyId:
+        Fn::If:
+          - IsStorageEncrypted
+          - !Ref KmsKeyId
+          - !Ref AWS::NoValue
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      VPCSecurityGroups: !Ref SecurityGroupIds
+
+Outputs:
+  DatabaseId:
+    Description: Database ID
+    Value: !Ref Database
+    Export:
+      Name: !Sub DatabaseId${Name}
+  DatabaseAddress:
+    Description: Database Address
+    Value: !GetAtt Database.Endpoint.Address
+    Export:
+      Name: !Sub DatabaseAddress${Name}
+  DatabasePort:
+    Description: Database Port
+    Value: !GetAtt Database.Endpoint.Port
+    Export:
+      Name: !Sub DatabasePort${Name}
+  DatabaseSubnetGroup:
+    Description: Database Subnet Group
+    Value: !Ref DatabaseSubnetGroup
+    Export:
+      Name: !Sub DatabaseSubnetGroup${Name}

@@ -1,0 +1,12 @@
+Account: 722373557042
+Role: arn:aws:iam::722373557042:role/cloudformation
+Region: us-east-1
+Capabilities: True
+Template: policy.yaml
+Stack: TestPolicy
+Inputs:
+  Name: testpolicy
+  Resources: arn:aws:s3:::*
+  Actions: s3:ListBucket, s3:GetObject
+  Allow: "True"
+  Users: christian, phil

@@ -1,0 +1,325 @@
+#jinja2: lstrip_blocks: True
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Bootstraps Resources Required By Cloudformation Runner
+
+Parameters:
+  Name:
+    Type: String
+    Description: Name Of Clouformation Project
+  Organization:
+    Type: String
+    Description: Name Of Organization Executing Cloudformation
+  CidrBlockVpc:
+    Type: String
+    Description: CIDR Block For Bootstrap VPC
+  CidrBlockSubnet1:
+    Type: String
+    Description: CIDR Block For Bootstrap VPC
+  CidrBlockSubnet2:
+    Type: String
+    Description: CIDR Block For Bootstrap VPC
+  AvailabilityZoneSubnet1:
+    Type: String
+    Default: us-east-1a
+  AvailabilityZoneSubnet2:
+    Type: String
+    Default: us-east-1b
+
+Resources:
+  Repository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName:
+        Fn::Sub: ${Organization}/${Name}
+      RepositoryPolicyText:
+        Version: 2012-10-17
+        Statement:
+          -
+            Sid: AllowPushPull
+            Effect: Allow
+            Principal:
+              AWS:
+                - Fn::Sub: arn:aws:iam::${AWS::AccountId}:root
+            Action:
+              - "ecr:GetDownloadUrlForLayer"
+              - "ecr:BatchGetImage"
+              - "ecr:BatchCheckLayerAvailability"
+              - "ecr:PutImage"
+              - "ecr:InitiateLayerUpload"
+              - "ecr:UploadLayerPart"
+              - "ecr:CompleteLayerUpload"
+
+  BucketBootstrap:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      BucketName:
+        Fn::Sub: ${Organization}-${Name}-${AWS::AccountId}-${AWS::Region}
+      AccessControl: AuthenticatedRead
+
+  BucketLambda:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      BucketName:
+        Fn::Sub: ${Organization}-lambda-${AWS::AccountId}-${AWS::Region}
+      AccessControl: AuthenticatedRead
+
+  RoleCloudformation:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: cloudformation
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs.amazonaws.com
+              AWS:
+                - !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+
+  AssumeRoleCloudformationPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      Groups:
+        - Administrator
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Resource:
+              - !Sub arn:aws:iam::${AWS::AccountId}:role/cloudformation
+            Effect: Allow
+      PolicyName: AssumeCloudformationRole
+
+  RoleECR:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ecr
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              AWS:
+                - !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess
+      Policies:
+        -
+          PolicyName: AssumeSelf
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action: sts:AssumeRole
+                Resource: !Sub arn:aws:iam::${AWS::AccountId}:role/ecr
+
+  AssumeRoleECRPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      Groups:
+        - Administrator
+      PolicyName: AssumeEcrRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Resource:
+              - !Sub arn:aws:iam::${AWS::AccountId}:role/ecr
+            Effect: Allow
+
+  RoleRDSMonitoring:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: rds-monitoring
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              AWS:
+                - !Sub arn:aws:iam::${AWS::AccountId}:root
+              Service:
+                - monitoring.rds.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
+
+  AssumeRoleRDSMonitoring:
+    Type: AWS::IAM::Policy
+    Properties:
+      Groups:
+        - Administrator
+      PolicyName: AssumeRdsMonitoringRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Resource:
+              - !Sub arn:aws:iam::${AWS::AccountId}:role/rds-monitoring
+            Effect: Allow
+
+  VPC:
+    Type: AWS::EC2::VPC
+    DeletionPolicy: Delete
+    Properties:
+      CidrBlock:
+        Ref: CidrBlockVpc
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  GatewayToInternet:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: VPC
+      InternetGatewayId:
+        Ref: InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayToInternet
+    Properties:
+      RouteTableId:
+        Ref: PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: InternetGateway
+
+  SubnetPublic1:
+    Type: AWS::EC2::Subnet
+    DependsOn:
+      - VPC
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Ref: CidrBlockSubnet1
+      MapPublicIpOnLaunch: True
+      AvailabilityZone: !Ref AvailabilityZoneSubnet1
+
+  SubnetPublic2:
+    Type: AWS::EC2::Subnet
+    DependsOn:
+      - VPC
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock:
+        Ref: CidrBlockSubnet2
+      MapPublicIpOnLaunch: True
+      AvailabilityZone: !Ref AvailabilityZoneSubnet2
+
+  PublicSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: SubnetPublic1
+      RouteTableId:
+        Ref: PublicRouteTable
+
+  PublicSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: SubnetPublic2
+      RouteTableId:
+        Ref: PublicRouteTable
+
+Outputs:
+  BucketNameBootstrap:
+    Description: Cloudformation Bucket Name
+    Value: !Ref BucketBootstrap
+    Export:
+      Name: BucketNameBootstrap
+  BucketArnBootstrap:
+    Description: Cloudformation Bucket Arn
+    Value: !GetAtt BucketBootstrap.Arn
+    Export:
+      Name: BucketArnBootstrap
+  BucketDomainBootstrap:
+    Description: Cloudformation Bucket Domain
+    Value: !GetAtt BucketBootstrap.DomainName
+    Export:
+      Name: BucketDomainBootstrap
+  BucketNameLambda:
+    Description: Lambda Bucket Name
+    Value: !Ref BucketLambda
+    Export:
+      Name: BucketNameLambda
+  BucketArnLambda:
+    Description: Lambda Bucket Arn
+    Value: !GetAtt BucketLambda.Arn
+    Export:
+      Name: BucketArnLambda
+  BucketDomainLambda:
+    Description: Lambda Bucket Domain
+    Value: !GetAtt BucketLambda.DomainName
+    Export:
+      Name: BucketDomainLambda
+  RepositoryArn:
+    Description: Cloudformation Repository Arn
+    Value:
+      Fn::GetAtt:
+        - Repository
+        - Arn
+    Export:
+      Name: RepositoryArnBootstrap
+  VpcId:
+    Description: Bootstrap VPC ID
+    Value:
+      Ref: VPC
+    Export:
+      Name: VpcIdBootstrap
+  SubnetIds:
+    Description: Bootstrap Subnet Id
+    Value:
+      Fn::Join:
+        - ","
+        - - !Ref SubnetPublic1
+          - !Ref SubnetPublic2
+    Export:
+      Name: SubnetIdsBootstrap
+
+  RoleArnCloudformation:
+    Description: Cloudformation Role ARN
+    Value: !Ref RoleCloudformation
+    Export:
+      Name: RoleArnCloudformation
+
+  RoleArnECR:
+    Description: ECR Role ARN
+    Value: !Ref RoleECR
+    Export:
+      Name: RoleArnECR
+
+  RoleArnRDSMonitoring:
+    Description: RDS Monitoring Role ARN
+    Value: !Ref RoleRDSMonitoring
+    Export:
+      Name: RoleArnRDSMonitoring

@@ -1,0 +1,27 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: ECS Cluster Definition
+
+Parameters:
+  Name:
+    Type: String
+    Description: AWS ECS Cluster Name
+
+Resources:
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName:
+        Fn::Sub: ${AWS::StackName}-${Name}
+
+Outputs:
+  ClusterArn:
+    Description: Cluster ARN
+    Value:
+      Fn::GetAtt:
+        - Cluster
+        - Arn
+    Export:
+      Name:
+        Fn::Sub: ClusterArn${Name}

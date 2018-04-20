@@ -1,0 +1,56 @@
+version: '3.4'
+
+x-base: &__base__
+  image: ${ORG}/${PROJECT}
+  labels:
+    project: ${PROJECT}
+  build:
+    context: .
+    dockerfile: ./Dockerfile
+    args:
+      PROJECT: ${PROJECT}
+      AWS_CLOUDFORMATION_BUCKET_DOMAIN: ${AWS_CLOUDFORMATION_BUCKET_DOMAIN}
+      AWS_CLOUDFORMATION_BUCKET_NAME: ${AWS_CLOUDFORMATION_BUCKET_NAME}
+      AWS_LAMBDA_BUCKET_NAME: ${AWS_LAMBDA_BUCKET_NAME}
+  environment:
+    ORG: ${ORG}
+    PROJECT: ${PROJECT}
+    AWS_ACCOUNT_ID: ${AWS_ACCOUNT_ID}
+    AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+    AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+    AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN}
+    AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
+    TAG: ${TAG}
+
+services:
+  base: &base
+    <<: *__base__
+    container_name: ${ORG}-${PROJECT}-base
+    entrypoint: ""
+    volumes:
+      - ./templates:${WORKDIR}/templates:ro
+
+  test:
+    <<: *base
+    container_name: ${ORG}-${PROJECT}-test
+    command: pytest -s ./src/tests
+    volumes:
+      - ./src:${WORKDIR}/src
+      - ./profiles:${WORKDIR}/profiles:ro
+      - ./templates:${WORKDIR}/templates:ro
+
+  install:
+    <<: *base
+    container_name: ${ORG}-${PROJECT}-install
+    command: pyinstaller --onefile ./src/cloudformation.py
+    volumes:
+      - ./src:${WORKDIR}/src:ro
+      - ./build:${WORKDIR}/dist
+
+  main:
+    <<: *__base__
+    container_name: ${ORG}-${PROJECT}-runner
+    volumes:
+      - ./profiles:${WORKDIR}/profiles:ro
+      - ./templates:${WORKDIR}/templates:ro
+      - ./build:${WORKDIR}/build:rw
